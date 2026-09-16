@@ -72,26 +72,26 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // 4. Iluminação
+    // 4. Iluminação Balanceada para Realçar Tom Pêssego
     scene.add(new THREE.AmbientLight(0xffffff, 1.2));
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
     keyLight.position.set(5, 5, 5);
     scene.add(keyLight);
 
-    const backLight = new THREE.DirectionalLight(0xffd5dc, 1.8);
+    const backLight = new THREE.DirectionalLight(0xffe4d6, 1.9); // Luz traseira quente cor pêssego
     backLight.position.set(0, 2, -4);
     scene.add(backLight);
 
-    // 5. Material Físico Rosé Translúcido
-    const roseGlassMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xf68b98),
+    // 5. Material de Vidro Rosé Pêssego Translúcido
+    const peachGlassMaterial = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(0xf29377), // Tom salmão/pêssego delicado
       transparent: true,
       opacity: 0.70,
-      roughness: 0.05,
-      metalness: 0.05,
+      roughness: 0.04,
+      metalness: 0.02,
       clearcoat: 1.0,
-      clearcoatRoughness: 0.05,
+      clearcoatRoughness: 0.04,
       ior: 1.5,
       side: THREE.DoubleSide
     });
@@ -105,36 +105,35 @@
       map: labelTexture,
       transparent: true,
       alphaTest: 0.02,
-      side: THREE.FrontSide, // Renderiza exclusivamente para fora
+      side: THREE.FrontSide, // Renderiza na face externa voltada para o observador
       depthWrite: false
     });
 
     const loadingEl = document.getElementById('loading');
 
-    // 7. Carregamento do GLB
+    // 7. Carregador GLB
     const loader = new GLTFLoader();
     loader.load(
       'garrafa.glb',
       (gltf) => {
         const model = gltf.scene;
 
-        // Aplica o material rosé em todas as partes da garrafa
+        // Aplica o material pêssego em todas as malhas da garrafa
         model.traverse((child) => {
           if (child.isMesh) {
-            child.material = roseGlassMaterial;
+            child.material = peachGlassMaterial;
           }
         });
 
-        // PASSO 1: Medir a garrafa nas dimensões NATIVAS do arquivo original
+        // Dimensões nativas originais da garrafa
         const nativeBox = new THREE.Box3().setFromObject(model);
         const nativeSize = nativeBox.getSize(new THREE.Vector3());
         const nativeCenter = nativeBox.getCenter(new THREE.Vector3());
 
-        // Raio e altura calculados exatamente na escala nativa do arquivo
-        const raioNativo = (nativeSize.x / 2) * 1.012; // 1.2% maior para envelopar sem colisão
+        const raioNativo = (nativeSize.x / 2) * 1.012; // Envolve o vidro com respiro ideal
         const alturaRotuloNativa = nativeSize.y * 0.28;
 
-        // PASSO 2: Criar o cilindro 360° COM AS MEDIDAS NATIVAS
+        // Cilindro do rótulo com mapeamento de UV padrão
         const labelGeometry = new THREE.CylinderGeometry(
           raioNativo,
           raioNativo,
@@ -144,31 +143,25 @@
           true
         );
 
-        // CORREÇÃO DEFINITIVA DO TEXTO INVERTIDO:
-        // Espelha o eixo U dos vértices para a leitura ser 100% da esquerda para a direita
-        const uvs = labelGeometry.attributes.uv;
-        for (let i = 0; i < uvs.count; i++) {
-          uvs.setX(i, 1.0 - uvs.getX(i));
-        }
-        uvs.needsUpdate = true;
-
         const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
 
-        // Posiciona o rótulo na base da garrafa ainda nas coordenadas nativas
+        // Posiciona na base cilíndrica da garrafa
         labelMesh.position.set(
           nativeCenter.x,
           nativeBox.min.y + (alturaRotuloNativa / 2) + (nativeSize.y * 0.03),
           nativeCenter.z
         );
 
-        // Gira o cilindro para alinhar a frente do design diretamente para a câmera
-        labelMesh.rotation.y = -Math.PI / 2;
+        // Rotação de 180° (Math.PI): 
+        // 1. Desespelha o texto (leitura correta da esquerda para a direita)
+        // 2. Aponta o centro da imagem diretamente para a câmera
+        // 3. Joga a emenda/costura para trás da garrafa
+        labelMesh.rotation.y = Math.PI;
 
-        // PASSO 3: VINCULAR O RÓTULO COMO FILHO DO MODELO
-        // Isso garante que qualquer escala aplicada à garrafa afete o rótulo junto
+        // Anexa o rótulo como filho do modelo antes de normalizar
         model.add(labelMesh);
 
-        // PASSO 4: NORMALIZAR O CONJUNTO INTEIRO PARA CABER NA TELA
+        // Normaliza a escala da garrafa + rótulo para 1.8m virtuais na cena
         const totalBox = new THREE.Box3().setFromObject(model);
         const totalSize = totalBox.getSize(new THREE.Vector3());
         const totalCenter = totalBox.getCenter(new THREE.Vector3());
@@ -177,7 +170,7 @@
         const scaleFactor = targetHeight / Math.max(totalSize.x, totalSize.y, totalSize.z);
         model.scale.setScalar(scaleFactor);
 
-        // Centraliza o conjunto perfeitamente na origem
+        // Centraliza na viewport
         model.position.x = -totalCenter.x * scaleFactor;
         model.position.y = -totalCenter.y * scaleFactor;
         model.position.z = -totalCenter.z * scaleFactor;
@@ -199,7 +192,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // 9. Loop de animação contínua
+    // 9. Loop de renderização
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
