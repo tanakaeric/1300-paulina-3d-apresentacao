@@ -90,7 +90,7 @@
 
     // 5. Material de Vidro Rosé Pêssego Translúcido
     const peachGlassMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xb87333),
+      color: new THREE.Color(0xf29377),
       transparent: true,
       opacity: 0.70,
       roughness: 0.04,
@@ -103,7 +103,7 @@
 
     // 6. Material de Alumínio Calibrado para Iluminação de Estúdio
     const aluminumCapMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(0xefeff2), // Alumínio claro iluminado
+      color: new THREE.Color(0xb87333), // Alumínio claro iluminado
       metalness: 0.35,                  // Permite leitura clara do relevo sem escurecer
       roughness: 0.25,                  // Acabamento acetinado escovado
       side: THREE.DoubleSide
@@ -172,9 +172,9 @@
 
         // --- B. CÁPSULA / TAMPA DE ALUMÍNIO NO GARGALO ---
         // Proporção de gargalo para garrafas Borgonha da Tripo (~42% do raio do bojo)
-        const proporcaoRaioGargalo = 0.42; 
+        const proporcaoRaioGargalo = 0.35; 
         const raioGargalo = (nativeSize.x / 2) * proporcaoRaioGargalo;
-        const alturaTampa = nativeSize.y * 0.17;
+        const alturaTampa = nativeSize.y * 0.22;
 
         const capGeometry = new THREE.CylinderGeometry(
           raioGargalo,
