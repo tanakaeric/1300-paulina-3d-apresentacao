@@ -65,28 +65,32 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
+    renderer.toneMappingExposure = 1.35;
     document.body.appendChild(renderer.domElement);
 
-    // 3. Controles Orbitais
+    // 3. Controles
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
     // 4. Iluminação Balanceada
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    scene.add(new THREE.AmbientLight(0xffffff, 1.3));
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
     keyLight.position.set(5, 5, 5);
     scene.add(keyLight);
 
-    const backLight = new THREE.DirectionalLight(0xffe4d6, 1.9); // Realce do líquido pêssego
+    const backLight = new THREE.DirectionalLight(0xffe4d6, 1.9);
     backLight.position.set(0, 2, -4);
     scene.add(backLight);
 
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    fillLight.position.set(-5, 3, -2);
+    scene.add(fillLight);
+
     // 5. Material de Vidro Rosé Pêssego Translúcido
     const peachGlassMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xf29377),
+      color: new THREE.Color(0xb87333),
       transparent: true,
       opacity: 0.70,
       roughness: 0.04,
@@ -97,11 +101,11 @@
       side: THREE.DoubleSide
     });
 
-    // 6. Material de Alumínio Metálico para a Tampa
+    // 6. Material de Alumínio Calibrado para Iluminação de Estúdio
     const aluminumCapMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(0xd6d8db), // Prata metálica acetinada
-      metalness: 0.95,                  // Comportamento estrito de metal
-      roughness: 0.22,                  // Alumínio escovado com reflexo nítido
+      color: new THREE.Color(0xefeff2), // Alumínio claro iluminado
+      metalness: 0.35,                  // Permite leitura clara do relevo sem escurecer
+      roughness: 0.25,                  // Acabamento acetinado escovado
       side: THREE.DoubleSide
     });
 
@@ -109,8 +113,6 @@
     const textureLoader = new THREE.TextureLoader();
     const labelTexture = textureLoader.load('rotulo.png');
     labelTexture.colorSpace = THREE.SRGBColorSpace;
-
-    // ATIVAÇÃO DA NITIDEZ MÁXIMA (Anisotropia)
     labelTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     labelTexture.minFilter = THREE.LinearMipmapLinearFilter;
     labelTexture.magFilter = THREE.LinearFilter;
@@ -134,7 +136,7 @@
       (gltf) => {
         const model = gltf.scene;
 
-        // Aplica o vidro rosé em todas as partes da garrafa
+        // Aplica o vidro rosé
         model.traverse((child) => {
           if (child.isMesh) {
             child.material = peachGlassMaterial;
@@ -146,7 +148,7 @@
         const nativeSize = nativeBox.getSize(new THREE.Vector3());
         const nativeCenter = nativeBox.getCenter(new THREE.Vector3());
 
-        // --- A. GERAÇÃO DO RÓTULO NA BASE ---
+        // --- A. RÓTULO NA BASE ---
         const raioBaseNativo = (nativeSize.x / 2) * 1.012;
         const alturaRotuloNativa = nativeSize.y * 0.28;
 
@@ -165,32 +167,35 @@
           nativeBox.min.y + (alturaRotuloNativa / 2) + (nativeSize.y * 0.03),
           nativeCenter.z
         );
-        labelMesh.rotation.y = Math.PI; // Alinhamento frontal e leitura correta
+        labelMesh.rotation.y = Math.PI;
         model.add(labelMesh);
 
-        // --- B. GERAÇÃO DA TAMPA DE ALUMÍNIO NO GARGALO ---
-        // Proporções médias do gargalo de garrafa borgonha
-        const raioGargalo = (nativeSize.x / 2) * 0.38; 
-        const alturaTampa = nativeSize.y * 0.16; // Cobre o bocal e parte superior do pescoço
+        // --- B. CÁPSULA / TAMPA DE ALUMÍNIO NO GARGALO ---
+        // Proporção de gargalo para garrafas Borgonha da Tripo (~42% do raio do bojo)
+        const proporcaoRaioGargalo = 0.42; 
+        const raioGargalo = (nativeSize.x / 2) * proporcaoRaioGargalo;
+        const alturaTampa = nativeSize.y * 0.17;
 
         const capGeometry = new THREE.CylinderGeometry(
           raioGargalo,
-          raioGargalo * 1.03, // Leve conicidade natural da cápsula
+          raioGargalo * 1.02, // Leve cone para vestir perfeitamente a boca da garrafa
           alturaTampa,
           64,
           1,
-          false // Fechada no topo
+          false // Fechada no topo com tampa de metal
         );
 
         const capMesh = new THREE.Mesh(capGeometry, aluminumCapMaterial);
+        
+        // Posicionamento no topo exato da garrafa
         capMesh.position.set(
           nativeCenter.x,
-          nativeBox.max.y - (alturaTampa / 2) + 0.005,
+          nativeBox.max.y - (alturaTampa / 2) + (nativeSize.y * 0.005),
           nativeCenter.z
         );
         model.add(capMesh);
 
-        // --- C. NORMALIZAÇÃO DO CONJUNTO ---
+        // --- C. NORMALIZAÇÃO DE ESCALA ---
         const totalBox = new THREE.Box3().setFromObject(model);
         const totalSize = totalBox.getSize(new THREE.Vector3());
         const totalCenter = totalBox.getCenter(new THREE.Vector3());
