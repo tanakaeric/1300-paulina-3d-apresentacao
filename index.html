@@ -5,38 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Visualizador 3D - Garrafa</title>
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: radial-gradient(circle, #2c2d30 0%, #111215 100%);
-      font-family: sans-serif;
-    }
-    #loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #ffffff;
-      font-size: 1.1rem;
-      letter-spacing: 1px;
-      pointer-events: none;
-    }
-    #instrucoes {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 0.85rem;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 8px 16px;
-      border-radius: 20px;
-      pointer-events: none;
-    }
+    body { margin: 0; overflow: hidden; background: radial-gradient(circle, #2c2d30 0%, #111215 100%); font-family: sans-serif; }
+    #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 1.1rem; pointer-events: none; }
+    #instrucoes { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 0.85rem; background: rgba(0,0,0,0.4); padding: 8px 16px; border-radius: 20px; pointer-events: none; }
   </style>
-
-  <!-- Import maps para carregar Three.js diretamente via CDN -->
   <script type="importmap">
     {
       "imports": {
@@ -53,9 +25,8 @@
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-    // 1. Cena, Câmera e Renderizador
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 0, 5);
@@ -63,74 +34,66 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
     document.body.appendChild(renderer.domElement);
 
-    // 2. Controles de Mouse (OrbitControls)
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; // Movimento suave com inércia
+    controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 1.5;
-    controls.maxDistance = 10;
 
-    // 3. Iluminação de Estúdio
+    // Iluminação
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.0);
-    dirLight1.position.set(5, 10, 7);
-    scene.add(dirLight1);
-
-    const dirLight2 = new THREE.DirectionalLight(0xffffff, 1.0);
-    dirLight2.position.set(-5, -2, -5);
-    scene.add(dirLight2);
-
-    // 4. Carregamento do Modelo 3D (.glb)
-    const loader = new GLTFLoader();
+    // Carregamento do arquivo OBJ
+    const loader = new OBJLoader();
     const loadingEl = document.getElementById('loading');
 
-    // Substitua pelo caminho do seu arquivo se tiver outro nome
     loader.load(
-      'garrafa.glb',
-      (gltf) => {
-        const model = gltf.scene;
+      'garrafa.obj',
+      (object) => {
+        // Aplica material básico caso o OBJ venha sem texturas vinculadas
+        object.traverse((child) => {
+          if (child.isMesh && !child.material) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0x2e6f40, // Tom esverdeado para vidro
+              roughness: 0.2,
+              metalness: 0.1
+            });
+          }
+        });
 
-        // Centraliza a garrafa automaticamente no meio da tela
-        const box = new THREE.Box3().setFromObject(model);
+        // Centralização do modelo
+        const box = new THREE.Box3().setFromObject(object);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
 
-        model.position.x += (model.position.x - center.x);
-        model.position.y += (model.position.y - center.y);
-        model.position.z += (model.position.z - center.z);
+        object.position.x += (object.position.x - center.x);
+        object.position.y += (object.position.y - center.y);
+        object.position.z += (object.position.z - center.z);
 
-        // Ajusta a distância da câmera com base na altura da garrafa
         const maxDim = Math.max(size.x, size.y, size.z);
         camera.position.z = maxDim * 2.2;
         camera.lookAt(0, 0, 0);
 
-        scene.add(model);
+        scene.add(object);
         loadingEl.style.display = 'none';
       },
-      (xhr) => {
-        const percent = Math.round((xhr.loaded / xhr.total) * 100);
-        if (!isNaN(percent)) loadingEl.innerText = `Carregando: ${percent}%`;
-      },
+      undefined,
       (error) => {
-        console.error('Erro ao carregar o modelo:', error);
-        loadingEl.innerText = 'Erro ao carregar o modelo 3D. Verifique o console.';
+        console.error(error);
+        loadingEl.innerText = 'Erro ao carregar o arquivo .obj.';
       }
     );
 
-    // 5. Redimensionamento de Tela
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // 6. Loop de Renderização contínuo
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
