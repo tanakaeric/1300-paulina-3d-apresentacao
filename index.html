@@ -57,9 +57,9 @@
     // 1. Cena e Câmera
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0, 3.2);
+    camera.position.set(0, 0.1, 3.2);
 
-    // 2. Renderizador
+    // 2. Renderizador WebGL
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -72,7 +72,7 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // 4. Luzes de Estúdio para destacar o rosé
+    // 4. Iluminação Balanceada
     scene.add(new THREE.AmbientLight(0xffffff, 1.2));
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -83,9 +83,9 @@
     backLight.position.set(0, 2, -4);
     scene.add(backLight);
 
-    // 5. Material Físico Rosé Translúcido
+    // 5. Material de Vidro Rosé Translúcido
     const roseGlassMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xf68b98),       // Tom rosé translúcido
+      color: new THREE.Color(0xf68b98),
       transparent: true,
       opacity: 0.70,
       roughness: 0.05,
@@ -96,90 +96,93 @@
       side: THREE.DoubleSide
     });
 
-    // 6. Textura do Rótulo
+    // 6. Textura com Correção de Inversão/Espelhamento
     const textureLoader = new THREE.TextureLoader();
     const labelTexture = textureLoader.load('rotulo.png');
     labelTexture.colorSpace = THREE.SRGBColorSpace;
+    labelTexture.wrapS = THREE.RepeatWrapping;
+    labelTexture.wrapT = THREE.ClampToEdgeWrapping;
+    
+    // Desvira o espelhamento do rótulo para ficar legível da esquerda para a direita
+    labelTexture.repeat.set(-1, 1);
+    labelTexture.center.set(0.5, 0.5);
 
     const labelMaterial = new THREE.MeshBasicMaterial({
       map: labelTexture,
       transparent: true,
       alphaTest: 0.02,
-      side: THREE.FrontSide, // Renderiza na face externa voltada para fora
+      side: THREE.DoubleSide,
       depthWrite: false
     });
 
     const loadingEl = document.getElementById('loading');
 
-    // 7. Carregamento da Garrafa do Sketchfab
+    // 7. Carregador GLB com Cálculo Rigoroso de Matrizes
     const loader = new GLTFLoader();
     loader.load(
       'garrafa.glb',
       (gltf) => {
         const model = gltf.scene;
 
-        // Aplica o vidro rosé
+        // Aplica o vidro rosé em todas as partes da garrafa
         model.traverse((child) => {
           if (child.isMesh) {
             child.material = roseGlassMaterial;
           }
         });
 
-        // 1º PASSO: Normalizar a escala e centralizar no mundo
-        const box = new THREE.Box3().setFromObject(model);
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
+        // Força o Three.js a calcular as transformações aninhadas do Sketchfab
+        model.updateMatrixWorld(true);
 
+        // Mede o tamanho bruto original
+        const initialBox = new THREE.Box3().setFromObject(model);
+        const initialSize = initialBox.getSize(new THREE.Vector3());
+        const initialCenter = initialBox.getCenter(new THREE.Vector3());
+
+        // Normaliza para 1.8 unidades de altura
         const targetHeight = 1.8;
-        const scale = targetHeight / Math.max(size.x, size.y, size.z);
-        model.scale.set(scale, scale, scale);
+        const scaleFactor = targetHeight / Math.max(initialSize.x, initialSize.y, initialSize.z);
+        model.scale.setScalar(scaleFactor);
 
-        // Recalcula o centro após aplicar a escala
-        model.position.x = -center.x * scale;
-        model.position.y = -center.y * scale;
-        model.position.z = -center.z * scale;
+        // Centraliza a garrafa na origem
+        model.position.x = -initialCenter.x * scaleFactor;
+        model.position.y = -initialCenter.y * scaleFactor;
+        model.position.z = -initialCenter.z * scaleFactor;
 
-        // Container para encapsular a garrafa e o rótulo perfeitamente alinhados
-        const container = new THREE.Group();
-        container.add(model);
+        // Atualiza a cena e recalcula as dimensões normalizadas reais
+        scene.add(model);
+        model.updateMatrixWorld(true);
 
-        // 2º PASSO: Medir as dimensões exatas escaladas
-        const scaledBox = new THREE.Box3().setFromObject(container);
-        const scaledSize = scaledBox.getSize(new THREE.Vector3());
+        const realBox = new THREE.Box3().setFromObject(model);
+        const realSize = realBox.getSize(new THREE.Vector3());
 
-        // Raio da base cilíndrica da garrafa
-        const radius = (scaledSize.x / 2) * 1.015; // 1.5% maior para contornar o vidro perfeitamente
-        const labelHeight = scaledSize.y * 0.28;   // Faixa horizontal envolvente (terço inferior)
+        // Raio e altura perfeitamente proporcionais à garrafa na tela
+        const raio = (realSize.x / 2) * 1.015;  // 1.5% maior para envelopar o vidro sem conflito de malha
+        const altura = realSize.y * 0.28;      // Altura da faixa horizontal envolvente
 
-        // Geometria cilíndrica 360°
+        // Cilindro envolvente 360°
         const labelGeometry = new THREE.CylinderGeometry(
-          radius,
-          radius,
-          labelHeight,
+          raio,
+          raio,
+          altura,
           64,
           1,
           true
         );
 
-        // CORREÇÃO DO RÓTULO INVERTIDO / DO AVESSO:
-        // Ajusta as coordenadas UV para que o texto leia da esquerda para a direita na face externa
-        const uvs = labelGeometry.attributes.uv;
-        for (let i = 0; i < uvs.count; i++) {
-          uvs.setX(i, 1.0 - uvs.getX(i));
-        }
-        uvs.needsUpdate = true;
-
         const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
 
-        // Posiciona no terço inferior (corpo reto da garrafa Borgonha)
-        labelMesh.position.y = scaledBox.min.y + (labelHeight / 2) + 0.05;
+        // Posiciona no terço inferior (base cilíndrica da garrafa)
+        labelMesh.position.set(
+          0,
+          realBox.min.y + (altura / 2) + 0.05,
+          0
+        );
 
-        // Alinha a frente do rótulo para a câmera
-        labelMesh.rotation.y = Math.PI / 2;
+        // Gira o cilindro para alinhar o centro da arte com a visão frontal
+        labelMesh.rotation.y = -Math.PI / 2;
 
-        container.add(labelMesh);
-        scene.add(container);
-
+        scene.add(labelMesh);
         loadingEl.style.display = 'none';
       },
       undefined,
@@ -196,7 +199,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // 9. Loop contínuo
+    // 9. Loop de animação
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
