@@ -124,8 +124,8 @@
       side: THREE.FrontSide,
       depthWrite: false,
       polygonOffset: true,       // Força o rótulo a renderizar na frente
-      polygonOffsetFactor: -1,   // Puxa a camada visualmente para fora
-      polygonOffsetUnits: -1
+      polygonOffsetFactor: -2,   // Puxa a camada visualmente para fora
+      polygonOffsetUnits: -2
     });
 
     const loadingEl = document.getElementById('loading');
@@ -143,6 +143,7 @@
         model.traverse((child) => {
           if (child.isMesh) {
             child.material = peachGlassMaterial;
+            child.renderOrder = 0;  // <- ADICIONAR
           }
         });
 
@@ -170,6 +171,7 @@
           nativeBox.min.y + (alturaRotuloNativa / 2) + (nativeSize.y * 0.04),
           nativeCenter.z
         );
+        labelMesh.renderOrder = 10; // <- ADICIONAR
         labelMesh.rotation.y = Math.PI;
         model.add(labelMesh);
 
