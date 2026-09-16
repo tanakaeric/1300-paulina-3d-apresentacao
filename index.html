@@ -3,83 +3,203 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Visualizador 3D - Garrafa Borgonha</title>
+  <title>Visualizador 3D - Borgonha Rosé</title>
   <style>
     body {
       margin: 0;
-      padding: 0;
-      width: 100vw;
-      height: 100vh;
       overflow: hidden;
-      background: radial-gradient(circle, #2b2d30 0%, #111215 100%);
+      background: radial-gradient(circle, #2f3035 0%, #111215 100%);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    model-viewer {
-      width: 100%;
-      height: 100%;
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #ffffff;
+      font-size: 1rem;
+      letter-spacing: 1px;
+      pointer-events: none;
     }
     #instrucoes {
       position: absolute;
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 0.82rem;
-      background: rgba(0, 0, 0, 0.5);
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 0.8rem;
+      background: rgba(0, 0, 0, 0.45);
       backdrop-filter: blur(8px);
       padding: 8px 18px;
       border-radius: 20px;
       pointer-events: none;
     }
   </style>
-  <!-- Engine 3D oficial do Google -->
-  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-
-  <model-viewer
-    id="viewer"
-    src="garrafa.glb"
-    camera-controls
-    touch-action="pan-y"
-    interaction-prompt="auto"
-    shadow-intensity="1.5"
-    exposure="1.2"
-    camera-orbit="0deg 85deg auto"
-    min-camera-orbit="auto auto 5%"
-    max-camera-orbit="auto auto 200%">
-  </model-viewer>
-
-  <div id="instrucoes">Girar: Clique e arraste • Zoom: Scroll / Pinça</div>
+  <div id="loading">Renderizando garrafa e rosé...</div>
+  <div id="instrucoes">Girar: Botão esquerdo • Zoom: Scroll • Mover: Botão direito</div>
 
   <script type="module">
-    const viewer = document.querySelector('#viewer');
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-    viewer.addEventListener('load', async () => {
-      // 1. Acessa os materiais do modelo
-      const material = viewer.model.materials[0];
+    // 1. Cena e Câmera
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0.2, 3.2);
 
-      if (material) {
-        // 2. Configura vidro Borgonha translúcido
-        material.pbrMetallicRoughness.setBaseColorFactor([1.0, 1.0, 1.0, 1.0]);
-        material.pbrMetallicRoughness.setRoughnessFactor(0.05);
-        material.pbrMetallicRoughness.setMetallicFactor(0.0);
+    // 2. Renderizador
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.35;
+    document.body.appendChild(renderer.domElement);
 
-        if (material.transmission) {
-          material.transmission.setTransmissionFactor(0.95);
-          material.ior.setIOR(1.52);
-        }
+    // 3. Controles
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 1.2;
+    controls.maxDistance = 5.0;
 
-        // 3. Aplica a serigrafia/rótulo transparente
-        try {
-          const texture = await viewer.createTexture('rotulo.png');
-          material.pbrMetallicRoughness.baseColorTexture.setTexture(texture);
-          material.setAlphaMode('BLEND'); // Garante a transparência do fundo do PNG
-        } catch (e) {
-          console.warn('rotulo.png não encontrado ou erro ao carregar:', e);
-        }
-      }
+    // 4. Iluminação Especial para Realçar Transparência e Tom Rosé
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfff7f5, 2.8);
+    keyLight.position.set(4, 5, 4);
+    scene.add(keyLight);
+
+    const backLight = new THREE.DirectionalLight(0xffd5dc, 2.2); // Luz de fundo rosa para revelar a cor translúcida do líquido
+    backLight.position.set(0, 2, -4);
+    scene.add(backLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    fillLight.position.set(-4, 0, 3);
+    scene.add(fillLight);
+
+    // 5. Material Físico: Garrafa com Vinho Rosé Semi-Transparente
+    const roseGlassMaterial = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(0xf5989d),       // Tom rosé Provence / salmão delicado
+      transmission: 0.88,                     // Semi-transparente realista
+      opacity: 1.0,
+      transparent: true,
+      roughness: 0.04,                        // Vidro liso polido
+      ior: 1.45,                              // Refração realista de vidro com líquido
+      thickness: 0.8,                         // Dá profundidade ao corpo de vinho
+      clearcoat: 1.0,                         // Camada de verniz reflexivo externo
+      clearcoatRoughness: 0.05
     });
+
+    // 6. Textura do Rótulo Horizontal Envolvente (Wrap-around 360°)
+    const textureLoader = new THREE.TextureLoader();
+    const labelTexture = textureLoader.load('rotulo.png');
+    labelTexture.colorSpace = THREE.SRGBColorSpace;
+    labelTexture.wrapS = THREE.ClampToEdgeWrapping;
+    labelTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+    const labelMaterial = new THREE.MeshStandardMaterial({
+      map: labelTexture,
+      transparent: true,
+      alphaTest: 0.03,                        // Recorta perfeitamente o fundo transparente
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+
+    const loadingEl = document.getElementById('loading');
+
+    // 7. Carregamento e Posicionamento do Rótulo na Base
+    const loader = new OBJLoader();
+    loader.load(
+      'garrafa.obj',
+      (obj) => {
+        // Aplica o vidro rosé em toda a garrafa
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            child.material = roseGlassMaterial;
+          }
+        });
+
+        // Normalização de Tamanho (1.8 unidades de altura)
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+
+        const escala = 1.8 / Math.max(size.x, size.y, size.z);
+        obj.scale.set(escala, escala, escala);
+
+        // Centralização exata da garrafa
+        box.setFromObject(obj);
+        box.getCenter(center);
+        obj.position.x -= center.x;
+        obj.position.y -= center.y;
+        obj.position.z -= center.z;
+
+        // Medidas do corpo da Borgonha após a escala
+        const finalBox = new THREE.Box3().setFromObject(obj);
+        const finalSize = finalBox.getSize(new THREE.Vector3());
+
+        const raioBase = (finalSize.x / 2) * 1.012; // Ligeiramente maior que o vidro para o rótulo não sumir
+        const alturaRotulo = finalSize.y * 0.28;     // Faixa horizontal que toma a parte inferior
+
+        // Cilindro envolvente 360 graus na horizontal
+        const labelGeometry = new THREE.CylinderGeometry(
+          raioBase,
+          raioBase,
+          alturaRotulo,
+          64,
+          1,
+          true,
+          0,
+          Math.PI * 2 // 360 graus: dá a volta completa na garrafa
+        );
+
+        const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
+
+        // Posiciona na parte inferior (base da garrafa antes do início da curva do ombro borgonha)
+        labelMesh.position.y = finalBox.min.y + (alturaRotulo / 2) + 0.06;
+
+        // Gira o rótulo para alinhar o início da arte com a frente da câmera
+        labelMesh.rotation.y = Math.PI * 0.5;
+
+        obj.add(labelMesh);
+        scene.add(obj);
+
+        loadingEl.style.display = 'none';
+      },
+      undefined,
+      (err) => {
+        console.error(err);
+        loadingEl.innerText = 'Erro ao carregar garrafa.obj';
+      }
+    );
+
+    // 8. Responsividade
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // 9. Loop de animação
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
   </script>
 </body>
 </html>
