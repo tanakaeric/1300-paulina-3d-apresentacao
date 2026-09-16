@@ -8,7 +8,7 @@
     body {
       margin: 0;
       overflow: hidden;
-      background: radial-gradient(circle, #2f3035 0%, #111215 100%);
+      background: radial-gradient(circle, #2d2f34 0%, #111215 100%);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     #loading {
@@ -71,18 +71,16 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 1.2;
-    controls.maxDistance = 5.0;
 
-    // 4. Iluminação Especial para Realçar Transparência e Tom Rosé
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    // 4. Iluminação de Estúdio para Líquido Rosé
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff7f5, 2.8);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
     keyLight.position.set(4, 5, 4);
     scene.add(keyLight);
 
-    const backLight = new THREE.DirectionalLight(0xffd5dc, 2.2); // Luz de fundo rosa para revelar a cor translúcida do líquido
+    const backLight = new THREE.DirectionalLight(0xffc5cc, 2.0); // Luz traseira para acentuar o líquido rosé
     backLight.position.set(0, 2, -4);
     scene.add(backLight);
 
@@ -90,49 +88,54 @@
     fillLight.position.set(-4, 0, 3);
     scene.add(fillLight);
 
-    // 5. Material Físico: Garrafa com Vinho Rosé Semi-Transparente
+    // 5. Material de Vidro Rosé Translúcido
     const roseGlassMaterial = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0xf5989d),       // Tom rosé Provence / salmão delicado
-      transmission: 0.88,                     // Semi-transparente realista
+      color: new THREE.Color(0xf5989d),       // Tom rosé delicado
+      transmission: 0.88,                     // Semi-transparente
       opacity: 1.0,
       transparent: true,
-      roughness: 0.04,                        // Vidro liso polido
-      ior: 1.45,                              // Refração realista de vidro com líquido
-      thickness: 0.8,                         // Dá profundidade ao corpo de vinho
-      clearcoat: 1.0,                         // Camada de verniz reflexivo externo
+      roughness: 0.04,
+      ior: 1.48,
+      thickness: 0.6,
+      clearcoat: 1.0,
       clearcoatRoughness: 0.05
     });
 
-    // 6. Textura do Rótulo Horizontal Envolvente (Wrap-around 360°)
+    // 6. Textura com Orientação Ajustada
     const textureLoader = new THREE.TextureLoader();
     const labelTexture = textureLoader.load('rotulo.png');
     labelTexture.colorSpace = THREE.SRGBColorSpace;
-    labelTexture.wrapS = THREE.ClampToEdgeWrapping;
+    labelTexture.wrapS = THREE.RepeatWrapping;
     labelTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-    const labelMaterial = new THREE.MeshStandardMaterial({
+    // --- CONTROLES DE ORIENTAÇÃO DA TEXTURA ---
+    // Gira a textura em torno do centro caso ela venha em pé
+    labelTexture.center.set(0.5, 0.5);
+    labelTexture.rotation = 0; // Se estiver 90° de lado, mude para: Math.PI / 2
+    labelTexture.repeat.set(-1, 1); // Espelha horizontalmente (-1) para corrigir texto invertido no cilindro
+
+    const labelMaterial = new THREE.MeshBasicMaterial({
       map: labelTexture,
       transparent: true,
-      alphaTest: 0.03,                        // Recorta perfeitamente o fundo transparente
+      alphaTest: 0.02,
       side: THREE.DoubleSide,
       depthWrite: false
     });
 
     const loadingEl = document.getElementById('loading');
 
-    // 7. Carregamento e Posicionamento do Rótulo na Base
+    // 7. Carregamento e Posicionamento do Rótulo na Base da Garrafa
     const loader = new OBJLoader();
     loader.load(
       'garrafa.obj',
       (obj) => {
-        // Aplica o vidro rosé em toda a garrafa
         obj.traverse((child) => {
           if (child.isMesh) {
             child.material = roseGlassMaterial;
           }
         });
 
-        // Normalização de Tamanho (1.8 unidades de altura)
+        // Escala normalizada (1.8m de altura)
         const box = new THREE.Box3().setFromObject(obj);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
@@ -140,39 +143,37 @@
         const escala = 1.8 / Math.max(size.x, size.y, size.z);
         obj.scale.set(escala, escala, escala);
 
-        // Centralização exata da garrafa
+        // Centralização
         box.setFromObject(obj);
         box.getCenter(center);
         obj.position.x -= center.x;
         obj.position.y -= center.y;
         obj.position.z -= center.z;
 
-        // Medidas do corpo da Borgonha após a escala
+        // Dimensões finais da garrafa
         const finalBox = new THREE.Box3().setFromObject(obj);
         const finalSize = finalBox.getSize(new THREE.Vector3());
 
-        const raioBase = (finalSize.x / 2) * 1.012; // Ligeiramente maior que o vidro para o rótulo não sumir
-        const alturaRotulo = finalSize.y * 0.28;     // Faixa horizontal que toma a parte inferior
+        const raioBase = (finalSize.x / 2) * 1.015; // 1.5% maior para contornar o vidro perfeitamente
+        const alturaRotulo = finalSize.y * 0.28;     // Faixa inferior correspondente ao corpo cilíndrico
 
-        // Cilindro envolvente 360 graus na horizontal
+        // Cilindro envolvente 360°
         const labelGeometry = new THREE.CylinderGeometry(
           raioBase,
           raioBase,
           alturaRotulo,
           64,
           1,
-          true,
-          0,
-          Math.PI * 2 // 360 graus: dá a volta completa na garrafa
+          true
         );
 
         const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
 
-        // Posiciona na parte inferior (base da garrafa antes do início da curva do ombro borgonha)
-        labelMesh.position.y = finalBox.min.y + (alturaRotulo / 2) + 0.06;
+        // Posiciona no terço inferior (rente à base da borgonha)
+        labelMesh.position.y = finalBox.min.y + (alturaRotulo / 2) + 0.04;
 
-        // Gira o rótulo para alinhar o início da arte com a frente da câmera
-        labelMesh.rotation.y = Math.PI * 0.5;
+        // Alinha a costura do rótulo para trás, deixando a frente voltada para a câmera
+        labelMesh.rotation.y = Math.PI;
 
         obj.add(labelMesh);
         scene.add(obj);
@@ -193,7 +194,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // 9. Loop de animação
+    // 9. Loop
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
