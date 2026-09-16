@@ -152,7 +152,7 @@
         const nativeCenter = nativeBox.getCenter(new THREE.Vector3());
 
         // --- A. RÓTULO NA BASE ---
-        const raioBaseNativo = (nativeSize.x / 2) * 1.0015;
+        const raioBaseNativo = (nativeSize.x / 2) * 1.0008;
         const alturaRotuloNativa = nativeSize.y * 0.28;
 
         const labelGeometry = new THREE.CylinderGeometry(
@@ -167,7 +167,7 @@
         const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
         labelMesh.position.set(
           nativeCenter.x,
-          nativeBox.min.y + (alturaRotuloNativa / 2) + (nativeSize.y * 0.03),
+          nativeBox.min.y + (alturaRotuloNativa / 2) + (nativeSize.y * 0.08),
           nativeCenter.z
         );
         labelMesh.rotation.y = Math.PI;
