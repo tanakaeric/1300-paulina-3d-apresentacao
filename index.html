@@ -127,7 +127,7 @@
     // 7. Carregamento e Posicionamento do Rótulo na Base da Garrafa
     const loader = new OBJLoader();
     loader.load(
-      'garrafa.obj',
+      'garrafa.glb',
       (obj) => {
         obj.traverse((child) => {
           if (child.isMesh) {
@@ -183,7 +183,7 @@
       undefined,
       (err) => {
         console.error(err);
-        loadingEl.innerText = 'Erro ao carregar garrafa.obj';
+        loadingEl.innerText = 'Erro ao carregar garrafa.glb';
       }
     );
 
