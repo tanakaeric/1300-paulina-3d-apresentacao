@@ -46,22 +46,21 @@
   </script>
 </head>
 <body>
-  <div id="loading">Descompactando e renderizando garrafa...</div>
+  <div id="loading">Renderizando garrafa, rótulo e tampa...</div>
   <div id="instrucoes">Girar: Botão esquerdo • Zoom: Scroll • Mover: Botão direito</div>
 
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    // Decodificador essencial para arquivos comprimidos do Sketchfab
     import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
     // 1. Cena e Câmera
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0, 3.2);
+    camera.position.set(0, 0.1, 3.2);
 
-    // 2. Renderizador WebGL
+    // 2. Renderizador com suporte à alta densidade de pixels
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -69,23 +68,23 @@
     renderer.toneMappingExposure = 1.3;
     document.body.appendChild(renderer.domElement);
 
-    // 3. Controles
+    // 3. Controles Orbitais
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // 4. Iluminação Balanceada para Tom Pêssego
+    // 4. Iluminação Balanceada
     scene.add(new THREE.AmbientLight(0xffffff, 1.2));
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
     keyLight.position.set(5, 5, 5);
     scene.add(keyLight);
 
-    const backLight = new THREE.DirectionalLight(0xffe4d6, 1.9);
+    const backLight = new THREE.DirectionalLight(0xffe4d6, 1.9); // Realce do líquido pêssego
     backLight.position.set(0, 2, -4);
     scene.add(backLight);
 
-    // 5. Material Translúcido Rosé Pêssego
+    // 5. Material de Vidro Rosé Pêssego Translúcido
     const peachGlassMaterial = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(0xf29377),
       transparent: true,
@@ -98,10 +97,23 @@
       side: THREE.DoubleSide
     });
 
-    // 6. Textura do Rótulo
+    // 6. Material de Alumínio Metálico para a Tampa
+    const aluminumCapMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0xd6d8db), // Prata metálica acetinada
+      metalness: 0.95,                  // Comportamento estrito de metal
+      roughness: 0.22,                  // Alumínio escovado com reflexo nítido
+      side: THREE.DoubleSide
+    });
+
+    // 7. Textura do Rótulo em Alta Resolução
     const textureLoader = new THREE.TextureLoader();
     const labelTexture = textureLoader.load('rotulo.png');
     labelTexture.colorSpace = THREE.SRGBColorSpace;
+
+    // ATIVAÇÃO DA NITIDEZ MÁXIMA (Anisotropia)
+    labelTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    labelTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    labelTexture.magFilter = THREE.LinearFilter;
 
     const labelMaterial = new THREE.MeshBasicMaterial({
       map: labelTexture,
@@ -113,7 +125,7 @@
 
     const loadingEl = document.getElementById('loading');
 
-    // 7. Carregador GLB configurado com MeshoptDecoder
+    // 8. Carregador GLB com Meshopt
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
 
@@ -122,24 +134,25 @@
       (gltf) => {
         const model = gltf.scene;
 
+        // Aplica o vidro rosé em todas as partes da garrafa
         model.traverse((child) => {
           if (child.isMesh) {
             child.material = peachGlassMaterial;
           }
         });
 
-        // Medidas brutas nativas da garrafa descompactada
+        // Dimensões nativas da garrafa
         const nativeBox = new THREE.Box3().setFromObject(model);
         const nativeSize = nativeBox.getSize(new THREE.Vector3());
         const nativeCenter = nativeBox.getCenter(new THREE.Vector3());
 
-        const raioNativo = (nativeSize.x / 2) * 1.012;
+        // --- A. GERAÇÃO DO RÓTULO NA BASE ---
+        const raioBaseNativo = (nativeSize.x / 2) * 1.012;
         const alturaRotuloNativa = nativeSize.y * 0.28;
 
-        // Cilindro do rótulo
         const labelGeometry = new THREE.CylinderGeometry(
-          raioNativo,
-          raioNativo,
+          raioBaseNativo,
+          raioBaseNativo,
           alturaRotuloNativa,
           64,
           1,
@@ -147,19 +160,37 @@
         );
 
         const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
-
         labelMesh.position.set(
           nativeCenter.x,
           nativeBox.min.y + (alturaRotuloNativa / 2) + (nativeSize.y * 0.03),
           nativeCenter.z
         );
-
-        // Desespelha o texto e centraliza a frente
-        labelMesh.rotation.y = Math.PI;
-
+        labelMesh.rotation.y = Math.PI; // Alinhamento frontal e leitura correta
         model.add(labelMesh);
 
-        // Normalização de Escala (1.8m virtuais)
+        // --- B. GERAÇÃO DA TAMPA DE ALUMÍNIO NO GARGALO ---
+        // Proporções médias do gargalo de garrafa borgonha
+        const raioGargalo = (nativeSize.x / 2) * 0.38; 
+        const alturaTampa = nativeSize.y * 0.16; // Cobre o bocal e parte superior do pescoço
+
+        const capGeometry = new THREE.CylinderGeometry(
+          raioGargalo,
+          raioGargalo * 1.03, // Leve conicidade natural da cápsula
+          alturaTampa,
+          64,
+          1,
+          false // Fechada no topo
+        );
+
+        const capMesh = new THREE.Mesh(capGeometry, aluminumCapMaterial);
+        capMesh.position.set(
+          nativeCenter.x,
+          nativeBox.max.y - (alturaTampa / 2) + 0.005,
+          nativeCenter.z
+        );
+        model.add(capMesh);
+
+        // --- C. NORMALIZAÇÃO DO CONJUNTO ---
         const totalBox = new THREE.Box3().setFromObject(model);
         const totalSize = totalBox.getSize(new THREE.Vector3());
         const totalCenter = totalBox.getCenter(new THREE.Vector3());
@@ -182,14 +213,14 @@
       }
     );
 
-    // 8. Responsividade
+    // 9. Responsividade
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // 9. Loop contínuo
+    // 10. Loop contínuo
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
