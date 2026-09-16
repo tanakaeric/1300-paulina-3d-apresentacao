@@ -53,14 +53,13 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
     // 1. Cena e Câmera
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0.1, 3.4);
+    camera.position.set(0, 0, 3.2);
 
-    // 2. Renderizador com suporte a materiais físicos e refração
+    // 2. Renderizador
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -68,22 +67,22 @@
     renderer.toneMappingExposure = 1.3;
     document.body.appendChild(renderer.domElement);
 
-    // 3. Controles Interativos
+    // 3. Controles
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 1.2;
     controls.maxDistance = 5.0;
 
-    // 4. Luzes de Estúdio (essenciais para realçar o brilho do vidro translúcido)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // 4. Iluminação de Estúdio
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
     keyLight.position.set(4, 5, 4);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xeef5ff, 1.6);
+    const fillLight = new THREE.DirectionalLight(0xeef5ff, 1.5);
     fillLight.position.set(-4, 2, -3);
     scene.add(fillLight);
 
@@ -91,122 +90,112 @@
     rimLight.position.set(0, 4, -4);
     scene.add(rimLight);
 
-    // 5. Materiais
-    // Vidro Transparente Cristalino
+    // 5. Material de Vidro Borgonha Transparente
     const glassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
-      transmission: 0.95,       // Quase 100% transparente
+      transmission: 0.92,
       opacity: 1.0,
       transparent: true,
-      roughness: 0.04,          // Vidro polido e liso
-      ior: 1.52,                // Índice de refração do vidro
-      clearcoat: 1.0,           // Brilho externo espelhado
+      roughness: 0.05,
+      ior: 1.5,
+      clearcoat: 1.0,
       clearcoatRoughness: 0.05
     });
 
-    // Textura do Rótulo em PNG Transparente (Serigrafia)
+    // 6. Carregamento da Textura do Rótulo
     const textureLoader = new THREE.TextureLoader();
-    const labelTexture = textureLoader.load('rotulo.png');
-    labelTexture.colorSpace = THREE.SRGBColorSpace;
-
-    const labelMaterial = new THREE.MeshStandardMaterial({
-      map: labelTexture,
-      transparent: true,
-      roughness: 0.3,
-      metalness: 0.1,
-      depthWrite: false,        // Evita conflitos de renderização com o vidro
-      side: THREE.DoubleSide
-    });
-
     const loadingEl = document.getElementById('loading');
 
-    // 6. Normalização de Escala e Aplicação do Rótulo Curvo
-    function aplicarModelo(objeto3D) {
-      const box = new THREE.Box3().setFromObject(objeto3D);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
+    const labelTexture = textureLoader.load(
+      'rotulo.png',
+      () => console.log('Rótulo PNG carregado com sucesso!'),
+      undefined,
+      (err) => console.error('Erro ao carregar rotulo.png. Verifique se o arquivo está na mesma pasta.', err)
+    );
+    labelTexture.colorSpace = THREE.SRGBColorSpace;
 
-      // Normaliza a altura total para 1.8m virtuais
-      const targetHeight = 1.8;
-      const escala = targetHeight / Math.max(size.x, size.y, size.z);
-      objeto3D.scale.set(escala, escala, escala);
+    const labelMaterial = new THREE.MeshBasicMaterial({
+      map: labelTexture,
+      transparent: true,
+      alphaTest: 0.05,        // Recorta o canal alfa transparente do PNG
+      side: THREE.DoubleSide,  // Visível em ambos os lados
+      depthWrite: false
+    });
 
-      box.setFromObject(objeto3D);
-      box.getCenter(center);
-      objeto3D.position.x -= center.x;
-      objeto3D.position.y -= center.y;
-      objeto3D.position.z -= center.z;
+    // 7. Carregador e Posicionamento Preciso do Rótulo
+    const loader = new OBJLoader();
+    loader.load(
+      'garrafa.obj',
+      (obj) => {
+        // Aplica o vidro em todas as malhas da garrafa
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            child.material = glassMaterial;
+          }
+        });
 
-      // Recalcula dimensões exatas da garrafa após a escala
-      const scaledSize = new THREE.Box3().setFromObject(objeto3D).getSize(new THREE.Vector3());
-      const raioGarrafa = (scaledSize.x / 2) * 0.98;
+        // Normalização de Tamanho (1.8m de altura)
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
 
-      // Cria a malha curva para aplicar o rótulo transparente na barriga da Borgonha
-      const labelGeometry = new THREE.CylinderGeometry(
-        raioGarrafa * 1.015,     // Topo levemente sobreposto ao vidro
-        raioGarrafa * 1.015,     // Base levemente sobreposta ao vidro
-        0.7,                     // Altura do rótulo
-        64,                      // Suavidade da curva
-        1,
-        true,                    // Aberto
-        Math.PI * 0.75,          // Início do arco frontal
-        Math.PI * 0.5            // Arco de visualização frontal (~90 graus)
-      );
-      const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
-      labelMesh.position.y = -0.15; // Posicionamento na altura do bojo da garrafa
-      objeto3D.add(labelMesh);
+        const escala = 1.8 / Math.max(size.x, size.y, size.z);
+        obj.scale.set(escala, escala, escala);
 
-      scene.add(objeto3D);
-      loadingEl.style.display = 'none';
-    }
+        // Centralização
+        box.setFromObject(obj);
+        box.getCenter(center);
+        obj.position.x -= center.x;
+        obj.position.y -= center.y;
+        obj.position.z -= center.z;
 
-    // 7. Carregador
-    const modeloNome = 'garrafa.obj'; // Altere para 'garrafa.glb' se for o caso
+        // Dimensões recalculadas
+        const newBox = new THREE.Box3().setFromObject(obj);
+        const newSize = newBox.getSize(new THREE.Vector3());
+        
+        // Raio do bojo da borgonha (metade da largura X)
+        const radius = (newSize.x / 2) * 1.01; // 1% maior que a garrafa para não sumir dentro do vidro
+        const labelHeight = newSize.y * 0.35;  // Rótulo ocupa cerca de 35% da altura da garrafa
 
-    if (modeloNome.endsWith('.obj')) {
-      new OBJLoader().load(
-        modeloNome,
-        (obj) => {
-          obj.traverse((child) => {
-            if (child.isMesh) {
-              child.material = glassMaterial;
-            }
-          });
-          aplicarModelo(obj);
-        },
-        undefined,
-        (err) => {
-          console.error(err);
-          loadingEl.innerText = 'Erro ao carregar o arquivo 3D.';
-        }
-      );
-    } else {
-      new GLTFLoader().load(
-        modeloNome,
-        (gltf) => {
-          gltf.scene.traverse((child) => {
-            if (child.isMesh) {
-              child.material = glassMaterial;
-            }
-          });
-          aplicarModelo(gltf.scene);
-        },
-        undefined,
-        (err) => {
-          console.error(err);
-          loadingEl.innerText = 'Erro ao carregar o arquivo 3D.';
-        }
-      );
-    }
+        // Geometria curva cobrindo o arco frontal (120 graus = ~2.09 radianos)
+        const arcAngle = Math.PI * 0.65; 
+        const labelGeometry = new THREE.CylinderGeometry(
+          radius,
+          radius,
+          labelHeight,
+          48,
+          1,
+          true,
+          -arcAngle / 2, // Centraliza o arco virado exatamente para a câmera (eixo Z positivo)
+          arcAngle
+        );
 
-    // Redimensionamento responsivo
+        const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
+        
+        // Posiciona o rótulo no terço inferior da borgonha (área reta antes da curva do ombro)
+        labelMesh.position.y = -newSize.y * 0.08;
+        
+        // Adiciona à garrafa
+        obj.add(labelMesh);
+        scene.add(obj);
+
+        loadingEl.style.display = 'none';
+      },
+      undefined,
+      (err) => {
+        console.error('Erro ao carregar garrafa.obj', err);
+        loadingEl.innerText = 'Erro ao carregar o arquivo 3D.';
+      }
+    );
+
+    // 8. Responsividade
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // Loop
+    // 9. Loop de animação
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
