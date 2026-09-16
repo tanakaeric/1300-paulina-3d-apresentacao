@@ -122,7 +122,10 @@
       transparent: true,
       alphaTest: 0.02,
       side: THREE.FrontSide,
-      depthWrite: false
+      depthWrite: false,
+      polygonOffset: true,       // Força o rótulo a renderizar na frente
+      polygonOffsetFactor: -1,   // Puxa a camada visualmente para fora
+      polygonOffsetUnits: -1
     });
 
     const loadingEl = document.getElementById('loading');
@@ -149,7 +152,7 @@
         const nativeCenter = nativeBox.getCenter(new THREE.Vector3());
 
         // --- A. RÓTULO NA BASE ---
-        const raioBaseNativo = (nativeSize.x / 2) * 1.012;
+        const raioBaseNativo = (nativeSize.x / 2) * 1.0015;
         const alturaRotuloNativa = nativeSize.y * 0.28;
 
         const labelGeometry = new THREE.CylinderGeometry(
