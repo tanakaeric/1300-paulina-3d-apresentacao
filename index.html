@@ -3,12 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Visualizador 3D - Garrafa</title>
+  <title>Visualizador 3D - Garrafa Borgonha</title>
   <style>
-    body { margin: 0; overflow: hidden; background: radial-gradient(circle, #2c2d30 0%, #111215 100%); font-family: sans-serif; }
-    #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 1.1rem; pointer-events: none; }
-    #instrucoes { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 0.85rem; background: rgba(0,0,0,0.4); padding: 8px 16px; border-radius: 20px; pointer-events: none; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle, #2b2d30 0%, #121316 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #ffffff;
+      font-size: 1rem;
+      letter-spacing: 1px;
+      pointer-events: none;
+    }
+    #instrucoes {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.8rem;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      padding: 8px 18px;
+      border-radius: 20px;
+      pointer-events: none;
+    }
   </style>
+
   <script type="importmap">
     {
       "imports": {
@@ -20,80 +47,166 @@
 </head>
 <body>
   <div id="loading">Carregando garrafa 3D...</div>
-  <div id="instrucoes">Clique e arraste para girar • Scroll para zoom • Botão direito para mover</div>
+  <div id="instrucoes">Girar: Botão esquerdo • Zoom: Scroll • Mover: Botão direito</div>
 
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+    // 1. Cena e Câmera
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0, 5);
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0.1, 3.4);
 
+    // 2. Renderizador com suporte a materiais físicos e refração
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
     document.body.appendChild(renderer.domElement);
 
+    // 3. Controles Interativos
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
+    controls.minDistance = 1.2;
+    controls.maxDistance = 5.0;
 
-    // Iluminação
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    // 4. Luzes de Estúdio (essenciais para realçar o brilho do vidro translúcido)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
-    dirLight.position.set(5, 10, 7);
-    scene.add(dirLight);
 
-    // Carregamento do arquivo OBJ
-    const loader = new OBJLoader();
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+    keyLight.position.set(4, 5, 4);
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0xeef5ff, 1.6);
+    fillLight.position.set(-4, 2, -3);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    rimLight.position.set(0, 4, -4);
+    scene.add(rimLight);
+
+    // 5. Materiais
+    // Vidro Transparente Cristalino
+    const glassMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      transmission: 0.95,       // Quase 100% transparente
+      opacity: 1.0,
+      transparent: true,
+      roughness: 0.04,          // Vidro polido e liso
+      ior: 1.52,                // Índice de refração do vidro
+      clearcoat: 1.0,           // Brilho externo espelhado
+      clearcoatRoughness: 0.05
+    });
+
+    // Textura do Rótulo em PNG Transparente (Serigrafia)
+    const textureLoader = new THREE.TextureLoader();
+    const labelTexture = textureLoader.load('rotulo.png');
+    labelTexture.colorSpace = THREE.SRGBColorSpace;
+
+    const labelMaterial = new THREE.MeshStandardMaterial({
+      map: labelTexture,
+      transparent: true,
+      roughness: 0.3,
+      metalness: 0.1,
+      depthWrite: false,        // Evita conflitos de renderização com o vidro
+      side: THREE.DoubleSide
+    });
+
     const loadingEl = document.getElementById('loading');
 
-    loader.load(
-      'garrafa.obj',
-      (object) => {
-        // Aplica material básico caso o OBJ venha sem texturas vinculadas
-        object.traverse((child) => {
-          if (child.isMesh && !child.material) {
-            child.material = new THREE.MeshStandardMaterial({
-              color: 0x2e6f40, // Tom esverdeado para vidro
-              roughness: 0.2,
-              metalness: 0.1
-            });
-          }
-        });
+    // 6. Normalização de Escala e Aplicação do Rótulo Curvo
+    function aplicarModelo(objeto3D) {
+      const box = new THREE.Box3().setFromObject(objeto3D);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
 
-        // Centralização do modelo
-        const box = new THREE.Box3().setFromObject(object);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
+      // Normaliza a altura total para 1.8m virtuais
+      const targetHeight = 1.8;
+      const escala = targetHeight / Math.max(size.x, size.y, size.z);
+      objeto3D.scale.set(escala, escala, escala);
 
-        object.position.x += (object.position.x - center.x);
-        object.position.y += (object.position.y - center.y);
-        object.position.z += (object.position.z - center.z);
+      box.setFromObject(objeto3D);
+      box.getCenter(center);
+      objeto3D.position.x -= center.x;
+      objeto3D.position.y -= center.y;
+      objeto3D.position.z -= center.z;
 
-        const maxDim = Math.max(size.x, size.y, size.z);
-        camera.position.z = maxDim * 2.2;
-        camera.lookAt(0, 0, 0);
+      // Recalcula dimensões exatas da garrafa após a escala
+      const scaledSize = new THREE.Box3().setFromObject(objeto3D).getSize(new THREE.Vector3());
+      const raioGarrafa = (scaledSize.x / 2) * 0.98;
 
-        scene.add(object);
-        loadingEl.style.display = 'none';
-      },
-      undefined,
-      (error) => {
-        console.error(error);
-        loadingEl.innerText = 'Erro ao carregar o arquivo .obj.';
-      }
-    );
+      // Cria a malha curva para aplicar o rótulo transparente na barriga da Borgonha
+      const labelGeometry = new THREE.CylinderGeometry(
+        raioGarrafa * 1.015,     // Topo levemente sobreposto ao vidro
+        raioGarrafa * 1.015,     // Base levemente sobreposta ao vidro
+        0.7,                     // Altura do rótulo
+        64,                      // Suavidade da curva
+        1,
+        true,                    // Aberto
+        Math.PI * 0.75,          // Início do arco frontal
+        Math.PI * 0.5            // Arco de visualização frontal (~90 graus)
+      );
+      const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
+      labelMesh.position.y = -0.15; // Posicionamento na altura do bojo da garrafa
+      objeto3D.add(labelMesh);
 
+      scene.add(objeto3D);
+      loadingEl.style.display = 'none';
+    }
+
+    // 7. Carregador
+    const modeloNome = 'garrafa.obj'; // Altere para 'garrafa.glb' se for o caso
+
+    if (modeloNome.endsWith('.obj')) {
+      new OBJLoader().load(
+        modeloNome,
+        (obj) => {
+          obj.traverse((child) => {
+            if (child.isMesh) {
+              child.material = glassMaterial;
+            }
+          });
+          aplicarModelo(obj);
+        },
+        undefined,
+        (err) => {
+          console.error(err);
+          loadingEl.innerText = 'Erro ao carregar o arquivo 3D.';
+        }
+      );
+    } else {
+      new GLTFLoader().load(
+        modeloNome,
+        (gltf) => {
+          gltf.scene.traverse((child) => {
+            if (child.isMesh) {
+              child.material = glassMaterial;
+            }
+          });
+          aplicarModelo(gltf.scene);
+        },
+        undefined,
+        (err) => {
+          console.error(err);
+          loadingEl.innerText = 'Erro ao carregar o arquivo 3D.';
+        }
+      );
+    }
+
+    // Redimensionamento responsivo
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // Loop
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
